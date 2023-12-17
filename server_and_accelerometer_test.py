@@ -38,16 +38,9 @@ if wlan.status() != 3:
     raise RuntimeError('network connection failed')
 else:
     print('connected')
-    status = wlan.ifconfig(('192.168.137.200', '255.255.255.0', '192.168.1.1', '8.8.8.8'))
-    print( 'ip = 192.168.137.200')
+    status = wlan.ifconfig()#(('192.168.137.200', '255.255.255.0', '192.168.1.1', '8.8.8.8'))
+    print(status[0])# 'ip = 192.168.137.200')
 
-addr = socket.getaddrinfo('0.0.0.0', 80)[0][-1]
-
-s = socket.socket()
-s.bind(addr)
-s.listen(1)
-
-print('listening on', addr)
 
 
 ###############################################################################
@@ -157,6 +150,14 @@ utime.sleep(2.0)
 
 
 def server_remote():
+        
+    addr = socket.getaddrinfo('0.0.0.0', 80)[0][-1]
+
+    s = socket.socket()
+    s.bind(addr)
+    s.listen(1)
+
+    print('listening on', addr)
     # Listen for connections
     while True:
         try:
@@ -209,7 +210,7 @@ _thread.start_new_thread(server_remote, ())
 
 ## RUN PID CONTROLLER ETC!
 while True:
-    
+    '''
     # Read X, Y, and Z values from registers (16 bits each)
     data = reg_read(spi, cs, REG_DATAX0, 6)
 
@@ -228,4 +229,6 @@ while True:
           "| Y:", "{:.2f}".format(acc_y), \
           "| Z:", "{:.2f}".format(acc_z))
     
-    #utime.sleep(0.1)
+    utime.sleep(1)
+    '''
+    pass
