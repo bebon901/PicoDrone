@@ -11,10 +11,10 @@ import math
 
 led = Pin(15, Pin.OUT)
 
-fl = machine.Pin(21)
-fr = machine.Pin(20)
-bl = machine.Pin(19)
-br = machine.Pin(18)
+fl = machine.Pin(22)
+fr = machine.Pin(26)
+bl = machine.Pin(28)
+br = machine.Pin(21)
 
 mot_fl = PWM(fl)
 mot_fr = PWM(fr)
@@ -167,7 +167,7 @@ if (data != bytearray((DEVID,))):
 data = reg_read(spi, cs, REG_POWER_CTL)
 print(data)
 
-reg_write(spi, cs, 0x2C, 12)
+reg_write(spi, cs, 0x2C, 15)
 # Tell ADXL343 to start taking measurements by setting Measure bit to high
 data = int.from_bytes(data, "big") | (1 << 3)
 reg_write(spi, cs, REG_POWER_CTL, data)
@@ -185,26 +185,55 @@ des_y = 0
 
 run_pid = True
 throttle = 0 # 0-100 pls
+def cap_val(val, lower, upper):
+    if val < lower:
+        val = lower
+    if val > upper:
+        val = upper
+    return val
+def median(data):
+    data = sorted(data)
+    n = len(data)
+    if n % 2 == 1:
+        return data[n//2]
+    else:
+        i = n//2
+        return (data[i - 1] + data[i])/2
 def read_and_print_accelerometer():
     global throttle, des_x, des_y, pid_xp, pid_xi, pid_xd, pid_yp, pid_yi, pid_yd, mot_fr, mot_fl, mot_bl, mot_br, run_pid
     err_x = err_y = x_pid_i = y_pid_i = 0
+    ## Calibrate the gyro:
+    err_gyro_x = 0
+    err_gyro_y = 0
+    for i in range(200):
+        err_gyro_x += 
     while run_pid:
-        # Read X, Y, and Z values from registers (16 bits each)
-        data = reg_read(spi, cs, REG_DATAX0, 6)
+        ang_x = []
+        ang_y = []
+        for i in range(200):
+            # Read X, Y, and Z values from registers (16 bits each)
+            data = reg_read(spi, cs, REG_DATAX0, 6)
 
-        # Convert 2 bytes (little-endian) into 16-bit integer (signed)
-        acc_x = ustruct.unpack_from("<h", data, 0)[0]
-        acc_y = ustruct.unpack_from("<h", data, 2)[0]
-        acc_z = ustruct.unpack_from("<h", data, 4)[0]
+            # Convert 2 bytes (little-endian) into 16-bit integer (signed)
+            acc_x = ustruct.unpack_from("<h", data, 0)[0]
+            acc_y = ustruct.unpack_from("<h", data, 2)[0]
+            acc_z = ustruct.unpack_from("<h", data, 4)[0]
 
-        # Convert measurements to [m/s^2]
-        acc_x = acc_x * SENSITIVITY_2G * EARTH_GRAVITY
-        acc_y = acc_y * SENSITIVITY_2G * EARTH_GRAVITY
-        acc_z = acc_z * SENSITIVITY_2G * EARTH_GRAVITY
+            # Convert measurements to [m/s^2]
+            acc_x = acc_x * SENSITIVITY_2G * EARTH_GRAVITY
+            acc_y = acc_y * SENSITIVITY_2G * EARTH_GRAVITY
+            acc_z = acc_z * SENSITIVITY_2G * EARTH_GRAVITY
+            
+            # Compute angles
+            try:
+                ang_y.append(math.atan(acc_x / (acc_y**2 + acc_z**2)**0.5) * 360 / math.pi / 2)
+                ang_x.append(math.atan(acc_y / (acc_x**2 + acc_z**2)**0.5) * 360 / math.pi / 2)
+            except ZeroDivisionError:
+                print("DIVIDE BY ZERO FAILED!!")
+        print(ang_x)
+        ang_x = median(ang_x)
+        ang_y = median(ang_y)
         
-        # Compute angles
-        ang_y = math.atan(acc_x / (acc_y**2 + acc_z**2)**0.5) * 360 / math.pi / 2
-        ang_x = math.atan(acc_y / (acc_x**2 + acc_z**2)**0.5) * 360 / math.pi / 2
         
         prev_err_x = err_x
         prev_err_y = err_y
@@ -225,10 +254,10 @@ def read_and_print_accelerometer():
         val_y = y_pid_p + y_pid_i + y_pid_d
         
         ### MOTOR OUTPUT VALUES ###
-        val_fl = throttle + val_x + val_y
-        val_fr = throttle + val_x - val_y
-        val_bl = throttle - val_x + val_y
-        val_br = throttle - val_x - val_y
+        val_fl = cap_val(throttle + val_x + val_y, 0, 100)
+        val_fr = cap_val(throttle + val_x - val_y, 0, 100)
+        val_bl = cap_val(throttle - val_x + val_y, 0, 100)
+        val_br = cap_val(throttle - val_x - val_y, 0, 100)
         
         mot_fl.duty_u16(int(val_fl / 100 * 65535))        
         mot_fr.duty_u16(int(val_fr / 100 * 65535))        
@@ -244,8 +273,12 @@ def read_and_print_accelerometer():
               "| FR:", "{:.2f}".format(val_fr), \
               "| BL:", "{:.2f}".format(val_bl), \
               "| BR:", "{:.2f}".format(val_br))
+        print("FL:", "{:.2f}".format(int(val_fl / 100 * 65535)), \
+              "| FR:", "{:.2f}".format(int(val_fr / 100 * 65535)), \
+              "| BL:", "{:.2f}".format(int(val_bl / 100 * 65535)), \
+              "| BR:", "{:.2f}".format(int(val_br / 100 * 65535)))
         
-        #utime.sleep(0.01)    
+        #utime.sleep(0.1)    
             
             
 ## START WEBPAGE SERVER
