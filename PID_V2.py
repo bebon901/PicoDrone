@@ -44,12 +44,10 @@ des_y = 0
 ## Set the PID Constants
 pid_xd = 0
 pid_xi = 0
-pid_xp = 1
-
+pid_xp = 0.5
 pid_yd = 0
 pid_yi = 0
-pid_yp = 1
-
+pid_yp = 0.5
 
 ssid = 'Bens Laptop'
 password = 'password'
@@ -111,7 +109,7 @@ def read_and_print_accelerometer():
     err_gyro_x = 0
     err_gyro_y = 0
     err_gyro_z = 0
-    ang_x = ang_y = 0
+    ang_x = ang_y = ang_gyr_x = ang_gyr_y = 0
     print("Calibrating Gyro, please remain still")
     for i in range(200):
         x, y, z = mpu.read_gyro_data()
@@ -124,24 +122,42 @@ def read_and_print_accelerometer():
     print("All done!! Starting PID now")
     previous_time = time.ticks_us()
     while run_pid:
-        gyr_x, gyr_y, gyr_z = mpu.read_gyro_data()
-        acc_x, acc_y, acc_z = mpu.read_accel_data()
-        new_time = time.ticks_us()
-        ang_gyr_x = ang_gyr_x + gry_x*(new_time - previous_time)/1000000 # microseconds to seconds
-        ang_gyr_y = ang_gyr_y + gry_y*(new_time - previous_time)/1000000 # microseconds to seconds
-        previous_time = new_time
+        ang_xs = []
+        ang_ys = []
+        for i in range(20):
+            gyr_x, gyr_y, gyr_z = mpu.read_gyro_data()
+            acc_x, acc_y, acc_z = mpu.read_accel_data()
+            new_time = time.ticks_us()
+            gyr_x -= err_gyro_x
+            gyr_y -= err_gyro_y
+            gyr_z -= err_gyro_z
+            angc_gyr_x = gyr_x*(new_time - previous_time)/1000000 # microseconds to seconds
+            angc_gyr_y = gyr_y*(new_time - previous_time)/1000000 # microseconds to seconds
+            previous_time = new_time
+            
+            ang_acc_y = math.atan(acc_x / (acc_y**2 + acc_z**2)**0.5) * 360 / math.pi / 2
+            ang_acc_x = math.atan(acc_y / (acc_x**2 + acc_z**2)**0.5) * 360 / math.pi / 2
+            
+            # Combine the two measurements...
+            ang_x = 0.5 * (ang_x + angc_gyr_x) + 0.5 * ang_acc_x
+            ang_y = 0.5 * (ang_y + angc_gyr_y) + 0.5* ang_acc_y
+            
+            ang_xs.append(ang_x)
+            ang_ys.append(ang_y)
+        ang_x = 0
+        ang_y = 0
+        for r in range(len(ang_xs)):
+            ang_x += ang_xs[r] / len(ang_xs)
+            ang_y += ang_ys[r] / len(ang_xs)
+        ## DIRECTIONS ARE ORTHOGONAL to the drone, will change that here
+        use_ang_x = ang_y
+        use_ang_y = ang_x
         
-        ang_acc_y = math.atan(acc_x / (acc_y**2 + acc_z**2)**0.5) * 360 / math.pi / 2
-        ang_acc_x = math.atan(acc_y / (acc_x**2 + acc_z**2)**0.5) * 360 / math.pi / 2
-        
-        # Combine the two measurements...
-        ang_x = 0.98 * (ang_x + ang_gyr_x) + 0.02 * ang_acc_x
-        ang_y = 0.98 * (ang_y + ang_gyr_y) + 0.02 * ang_acc_y
         prev_err_x = err_x
         prev_err_y = err_y
         
-        err_x = ang_x - des_x
-        err_y = ang_y - des_y
+        err_x = use_ang_x - des_x
+        err_y = use_ang_y - des_y
         
         x_pid_p = err_x * pid_xp
         y_pid_p = err_y * pid_yp
@@ -165,11 +181,12 @@ def read_and_print_accelerometer():
         mot_fr.duty_u16(int(val_fr / 100 * 65535))        
         mot_bl.duty_u16(int(val_bl / 100 * 65535))       
         mot_br.duty_u16(int(val_br / 100 * 65535))
-        
+        '''
         # Print results
-        '''print("X:", "{:.2f}".format(ang_x), \
+        print("X:", "{:.2f}".format(ang_x), \
               "| Y:", "{:.2f}".format(ang_y), \
-              "| Z:", "{:.2f}".format(acc_z))'''
+              "| Z:", "{:.2f}".format(acc_z))
+        
         # Print results
         print("FL:", "{:.2f}".format(val_fl), \
               "| FR:", "{:.2f}".format(val_fr), \
@@ -179,8 +196,9 @@ def read_and_print_accelerometer():
               "| FR:", "{:.2f}".format(int(val_fr / 100 * 65535)), \
               "| BL:", "{:.2f}".format(int(val_bl / 100 * 65535)), \
               "| BR:", "{:.2f}".format(int(val_br / 100 * 65535)))
-        
-        #utime.sleep(0.1)    
+        '''
+        print(ang_x, ang_y, angc_gyr_x, angc_gyr_y, err_gyro_y)
+        #utime.sleep(0.01)    
             
             
 ## START WEBPAGE SERVER
@@ -242,6 +260,7 @@ while True:
         cl.close()
         print('connection closed')
     except KeyboardInterrupt:
-        cl.close()
+        #cl.close()
         run_pid = False
+        break
 run_pid = False
