@@ -34,6 +34,8 @@ while True:
                 r = requests.get(url = pico_address + "/down/kup")
             if event.key == pygame.K_DOWN:
                 r = requests.get(url = pico_address + "/down/kdown")
+            if event.key == pygame.K_0:
+                r = requests.get(url = pico_address + "/kill")
         if event.type == pygame.KEYUP:
             if event.key == pygame.K_w:
                 r = requests.get(url = pico_address + "/up/w")
